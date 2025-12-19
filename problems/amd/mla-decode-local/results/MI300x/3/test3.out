@@ -1,0 +1,17 @@
+benchmark-count: 2
+benchmark.0.spec: batchsize:128;dim:7168;dq:1536;prefill:4096;seed:9817
+benchmark.0.runs: 3
+benchmark.0.mean: 1445325.0
+benchmark.0.std: 7110.603420245007
+benchmark.0.err: 4105.308798779129
+benchmark.0.best: 1439061.0
+benchmark.0.worst: 1453054.0
+benchmark.1.spec: batchsize:128;dim:7168;dq:1536;prefill:6144;seed:5291
+benchmark.1.runs: 3
+benchmark.1.mean: 1817744.6666666667
+benchmark.1.std: 12491.30763104221
+benchmark.1.err: 7211.859823312647
+benchmark.1.best: 1809189.0
+benchmark.1.worst: 1832079.0
+geometric-mean: 1620.873779894658
+check: pass

@@ -16,8 +16,20 @@ try:
 except ImportError:
     TestSpec = dict
 
-from submission import custom_kernel
+# from submission import custom_kernel
 from reference import check_implementation, generate_input
+
+import pathlib
+
+module_path = pathlib.Path(os.environ["CUSTOM_KERNEL_MODULE"]).resolve()
+
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    module_path.stem, module_path
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+custom_kernel = module.custom_kernel
 
 WARMUP_RUNS = 10
 TIMED_RUNS = 100
@@ -259,16 +271,24 @@ def run_benchmarking(logger: PopcornOutput, tests: list[TestCase]):
     warm_up(tests[0])
     passed = True
     logger.log("benchmark-count", len(tests))
+    means = []
     for idx, test in enumerate(tests):
         logger.log(f"benchmark.{idx}.spec", test.spec)
         result = benchmark(test, False, 100, 10e9)
         if isinstance(result, Stats):
             for field in dataclasses.fields(Stats):
                 logger.log(f"benchmark.{idx}.{field.name}", getattr(result, field.name))
+            means.append(result.mean)
         else:
             passed = False
             logger.log(f"benchmark.{idx}.status", "fail")
             logger.log(f"benchmark.{idx}.error", result)
+
+    if means:
+        # Convert from nanoseconds to microseconds first, then calculate geometric mean
+        means_us = [mean / 1000.0 for mean in means]
+        geometric_mean = math.exp(sum(math.log(mean_us) for mean_us in means_us) / len(means_us))
+        logger.log("geometric-mean (us)", geometric_mean)
 
     if passed:
         logger.log("check", "pass")
@@ -292,14 +312,13 @@ def main():
     # mode = "test"
     mode = "leaderboard"
     
-    out_dir = "out_best/test1"
+    out_path = sys.argv[1]
+    out_dir = Path(out_path).parent
     os.makedirs(out_dir, exist_ok=True)
-    fd = f"{out_dir}/{mode}.out"
-    tests = get_test_cases(f"inputs/{mode}_cases.txt") if mode != "leaderboard" else get_test_cases(f"inputs/benchmark_cases.txt")
-    import pdb; pdb.set_trace()
     
+    tests = get_test_cases(f"inputs/{mode}_cases.txt") if mode != "leaderboard" else get_test_cases(f"inputs/benchmark_cases.txt")
 
-    with PopcornOutput(fd) as logger:
+    with PopcornOutput(out_path) as logger:
         seed = os.getenv("POPCORN_SEED")
         seed = int(seed) if seed else 42
         set_seed(seed)
@@ -328,17 +347,25 @@ def main():
             
             logger.log("benchmark-count", len(tests))
             passed = True
+            means = []
             for i in range(len(tests)):
                 result = benchmark(tests[i], True, 100, 30e9)
                 logger.log(f"benchmark.{i}.spec", tests[i].spec)
                 if isinstance(result, Stats):
                     for field in dataclasses.fields(Stats):
                         logger.log(f"benchmark.{i}.{field.name}", getattr(result, field.name))
+                    means.append(result.mean)
                 else:
                     passed = False
                     logger.log(f"benchmark.{i}.status", "fail")
                     logger.log(f"benchmark.{i}.error", str(result))  # TODO: Make sure result implements __str__?
                     break
+
+            if means:
+                # Convert from nanoseconds to microseconds first, then calculate geometric mean
+                means_us = [mean / 1000.0 for mean in means]
+                geometric_mean = math.exp(sum(math.log(mean_us) for mean_us in means_us) / len(means_us))
+                logger.log("geometric-mean", geometric_mean)
 
             logger.log("check", "pass" if passed else "fail")
         
